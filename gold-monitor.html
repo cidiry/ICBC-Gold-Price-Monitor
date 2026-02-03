@@ -1,0 +1,1122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>工行积存金监控</title>
+<style>
+/* ─── 全局 ─── */
+:root {
+  --bg: #0a0e14;
+  --surface: #111821;
+  --surface2: #161d2a;
+  --border: #1e2736;
+  --text: #c8cdd5;
+  --text-dim: #5c6370;
+  --gold: #c9a84c;
+  --gold-glow: rgba(201,168,76,.22);
+  --gold-light: #e2c87a;
+  --green: #3dd68c;
+  --red: #f25c5c;
+  --blue: #4da3ff;
+  --radius: 12px;
+  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+body { min-height: 100%; overflow-x: hidden; }
+
+/* ─── 顶栏 ─── */
+.topbar {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(10,14,20,.85);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--border);
+  padding: 10px 20px;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  flex-wrap: wrap;
+}
+.topbar-brand { display: flex; align-items: center; gap: 10px; }
+.topbar-brand .icon { width: 30px; height: 30px; background: linear-gradient(135deg, var(--gold), #a07820); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 16px; }
+.topbar-brand h1 { font-size: 15px; font-weight: 700; color: var(--gold-light); letter-spacing: .4px; }
+.topbar-meta { font-size: 11px; color: var(--text-dim); display: flex; gap: 14px; }
+.topbar-meta span { display: flex; align-items: center; gap: 5px; }
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.dot.off { background: var(--text-dim); }
+.refresh-btn {
+  background: none; border: 1px solid var(--border); color: var(--text-dim);
+  width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; transition: .2s;
+}
+.refresh-btn:hover { border-color: var(--gold); color: var(--gold); }
+.refresh-btn.spinning svg { animation: spin .7s linear infinite; }
+.refresh-btn.paused { border-color: var(--red); color: var(--red); background: rgba(242,92,92,.08); }
+.refresh-btn.paused:hover { border-color: #ff7070; color: #ff7070; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── 布局 ─── */
+.wrapper { max-width: 960px; margin: 0 auto; padding: 20px 18px 40px; }
+
+/* ─── 价格横幅 ─── */
+.price-banner {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 18px;
+}
+.price-card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 20px; position: relative; overflow: hidden;
+}
+.price-card::before {
+  content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+.price-card.buy::before { background: linear-gradient(90deg, var(--green), transparent); }
+.price-card.sell::before { background: linear-gradient(90deg, var(--red), transparent); }
+.price-card .label { font-size: 11px; color: var(--text-dim); text-transform: uppercase; letter-spacing: .8px; margin-bottom: 6px; display: flex; align-items: center; gap: 6px; }
+.price-card .label .tag { background: var(--surface2); padding: 2px 7px; border-radius: 4px; font-size: 10px; color: var(--text-dim); }
+.price-card .price-row { display: flex; align-items: baseline; gap: 10px; }
+.price-card .currency { font-size: 16px; color: var(--text-dim); font-weight: 600; }
+.price-card .price { font-size: 32px; font-weight: 700; color: #fff; letter-spacing: -.5px; font-variant-numeric: tabular-nums; }
+.price-card .change { font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.price-card .change.up { color: var(--red); }
+.price-card .change.down { color: var(--green); }
+.price-card .time { font-size: 11px; color: var(--text-dim); margin-top: 6px; }
+
+/* ─── 持仓面板 ─── */
+.section-title {
+  font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px;
+  display: flex; align-items: center; gap: 8px;
+}
+.section-title svg { color: var(--gold); }
+
+.portfolio {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 20px; margin-bottom: 18px;
+}
+.stats-row {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 18px;
+}
+.stat-box { background: var(--surface2); border-radius: 10px; padding: 12px 14px; }
+.stat-box .s-label { font-size: 11px; color: var(--text-dim); margin-bottom: 4px; }
+.stat-box .s-value { font-size: 18px; font-weight: 700; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat-box .s-value.up { color: var(--red); }
+.stat-box .s-value.down { color: var(--green); }
+.stat-box .s-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+.input-row { display: flex; gap: 10px; margin-bottom: 14px; }
+.input-group { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+.input-group label { font-size: 11px; color: var(--text-dim); }
+.input-group input {
+  height: 38px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: #fff; font-size: 15px; font-weight: 600; outline: none;
+  font-variant-numeric: tabular-nums;
+  transition: border-color .2s, box-shadow .2s;
+}
+.input-group input:focus { border-color: var(--gold); box-shadow: 0 0 0 3px var(--gold-glow); }
+
+.btn-row { display: flex; gap: 10px; }
+.btn {
+  flex: 1; height: 40px; border-radius: 10px; border: none;
+  font-size: 14px; font-weight: 600; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  transition: transform .15s, box-shadow .2s;
+}
+.btn:active { transform: scale(.97); }
+.btn.buy { background: linear-gradient(135deg, #2ecc71, #27ae60); color: #fff; }
+.btn.buy:hover { box-shadow: 0 6px 18px rgba(46,204,113,.3); }
+.btn.sell { background: linear-gradient(135deg, #e74c3c, #c0392b); color: #fff; }
+.btn.sell:hover { box-shadow: 0 6px 18px rgba(231,76,60,.3); }
+.btn.sell:disabled { opacity: .35; cursor: not-allowed; box-shadow: none; }
+
+/* ─── 交易历史 ─── */
+.trade-history {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 20px; margin-bottom: 18px; max-height: 220px; overflow-y: auto;
+}
+.trade-history::-webkit-scrollbar { width: 4px; }
+.trade-history::-webkit-scrollbar-track { background: transparent; }
+.trade-history::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+.trade-list { display: flex; flex-direction: column; gap: 6px; }
+.trade-item {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface2); border-radius: 8px; padding: 10px 14px;
+  font-size: 13px;
+}
+.trade-item .t-left { display: flex; align-items: center; gap: 10px; }
+.trade-item .t-badge {
+  font-size: 10px; font-weight: 700; padding: 3px 8px; border-radius: 4px;
+  text-transform: uppercase; letter-spacing: .5px;
+}
+.t-badge.buy { background: rgba(46,204,113,.15); color: var(--green); }
+.t-badge.sell { background: rgba(231,76,60,.15); color: var(--red); }
+.trade-item .t-detail { color: var(--text-dim); font-size: 11px; margin-top: 1px; }
+.trade-item .t-right { text-align: right; }
+.trade-item .t-amount { font-weight: 600; color: #fff; }
+.trade-item .t-time { font-size: 10px; color: var(--text-dim); }
+.empty-hint { color: var(--text-dim); font-size: 13px; text-align: center; padding: 18px 0; }
+
+/* ─── 图表 ─── */
+.chart-panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 20px; margin-bottom: 18px;
+}
+.chart-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.chart-tabs { display: flex; gap: 4px; }
+.chart-tab {
+  padding: 5px 13px; border-radius: 6px; border: none;
+  background: transparent; color: var(--text-dim); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: .2s;
+}
+.chart-tab:hover { color: var(--text); background: var(--surface2); }
+.chart-tab.active { background: var(--gold); color: var(--bg); }
+.chart-canvas-wrap { position: relative; width: 100%; height: 220px; }
+canvas#chart { width: 100%; height: 100%; display: block; }
+.chart-tooltip {
+  position: absolute; background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 8px 12px; pointer-events: none;
+  font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.4);
+  white-space: nowrap; display: none;
+}
+.chart-tooltip .ct-price { font-size: 15px; font-weight: 700; color: var(--gold-light); }
+.chart-tooltip .ct-time { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
+.chart-crosshair {
+  position: absolute; top: 0; bottom: 0; width: 1px;
+  background: linear-gradient(to bottom, transparent, var(--gold), transparent);
+  pointer-events: none; display: none;
+}
+
+/* ─── 设置面板 ─── */
+.settings-panel {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 18px 20px; margin-bottom: 18px;
+}
+.settings-section { margin-bottom: 18px; }
+.settings-section:last-child { margin-bottom: 0; }
+.settings-section .s-title { font-size: 12px; color: var(--text-dim); margin-bottom: 10px; display: flex; align-items: center; gap: 6px; }
+.settings-section .s-title svg { width: 14px; height: 14px; }
+
+/* 刷新频率 */
+.freq-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.freq-chip {
+  padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border);
+  background: var(--surface2); color: var(--text-dim); font-size: 12px; font-weight: 600;
+  cursor: pointer; transition: .2s;
+}
+.freq-chip:hover { border-color: var(--gold); color: var(--text); }
+.freq-chip.active { background: var(--gold); border-color: var(--gold); color: var(--bg); }
+
+/* Webhook */
+.webhook-row { display: flex; gap: 8px; align-items: center; }
+.webhook-row input {
+  flex: 1; height: 36px; padding: 0 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface2);
+  color: var(--text); font-size: 12px; outline: none; transition: .2s;
+}
+.webhook-row input:focus { border-color: var(--gold); }
+.webhook-row input::placeholder { color: var(--text-dim); }
+
+/* 监控规则 */
+.alerts-list { display: flex; flex-direction: column; gap: 8px; }
+.alert-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--surface2); border-radius: 8px; padding: 10px 14px;
+}
+.alert-item input[type=checkbox] { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
+.alert-item .alert-label { font-size: 13px; color: var(--text); flex: 1; }
+.alert-item .alert-label span { color: var(--text-dim); font-size: 12px; }
+.alert-item .alert-price-input {
+  width: 90px; height: 30px; padding: 0 8px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: #fff; font-size: 13px; font-weight: 600; outline: none; text-align: center;
+}
+.alert-item .alert-price-input:focus { border-color: var(--gold); }
+.alert-item .del-btn {
+  background: none; border: none; color: var(--text-dim); cursor: pointer;
+  width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  border-radius: 6px; transition: .2s;
+}
+.alert-item .del-btn:hover { background: rgba(242,92,92,.15); color: var(--red); }
+.add-alert-btn {
+  background: none; border: 1px dashed var(--border); color: var(--text-dim);
+  border-radius: 8px; padding: 8px; font-size: 12px; cursor: pointer;
+  transition: .2s; width: 100%; text-align: center;
+}
+.add-alert-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+/* 开关 */
+.toggle { position: relative; width: 42px; height: 24px; }
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle .slider {
+  position: absolute; inset: 0; background: var(--border); border-radius: 24px;
+  cursor: pointer; transition: .25s;
+}
+.toggle .slider::before {
+  content: ''; position: absolute; width: 18px; height: 18px;
+  left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: .25s;
+}
+.toggle input:checked + .slider { background: var(--gold); }
+.toggle input:checked + .slider::before { transform: translateX(18px); }
+
+/* ─── 通知 Toast ─── */
+.toast-stack { position: fixed; top: 60px; right: 18px; z-index: 999; display: flex; flex-direction: column; gap: 8px; }
+.toast {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 18px; box-shadow: 0 6px 24px rgba(0,0,0,.4);
+  display: flex; align-items: center; gap: 10px; font-size: 13px;
+  animation: slideIn .3s ease, fadeOut .3s .3s ease forwards;
+  max-width: 320px;
+}
+.toast.alert-up { border-color: rgba(242,92,92,.4); }
+.toast.alert-down { border-color: rgba(77,163,255,.4); }
+.toast .toast-icon { font-size: 18px; }
+@keyframes slideIn { from { transform: translateX(110%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+
+/* ─── 响应式 ─── */
+@media (max-width: 640px) {
+  .price-banner { grid-template-columns: 1fr; }
+  .stats-row { grid-template-columns: repeat(2, 1fr); }
+  .input-row { flex-direction: column; }
+  .wrapper { padding: 14px 12px 36px; }
+  .price-card .price { font-size: 26px; }
+}
+
+/* ─── 滚动条 ─── */
+body::-webkit-scrollbar { width: 6px; }
+body::-webkit-scrollbar-track { background: var(--bg); }
+body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+/* 加载动画 */
+.loading-shimmer {
+  background: linear-gradient(90deg, var(--surface2) 25%, rgba(255,255,255,.04) 50%, var(--surface2) 75%);
+  background-size: 200% 100%; animation: shimmer 1.2s infinite;
+  border-radius: 6px; color: transparent;
+}
+@keyframes shimmer { to { background-position: -200% 0; } }
+
+/* 警报闪烁 */
+@keyframes alertPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(242,92,92,.4); }
+  50% { box-shadow: 0 0 0 6px rgba(242,92,92,0); }
+}
+.price-card.alert-triggered { animation: alertPulse .8s ease 3; }
+</style>
+</head>
+<body>
+
+<!-- ─── 顶栏 ─── -->
+<div class="topbar">
+  <div class="topbar-brand">
+    <div class="topbar-brand icon"><span style="font-size:18px">🥇</span></div>
+    <div>
+      <h1>工行积存金监控</h1>
+    </div>
+  </div>
+  <div class="topbar-meta">
+    <span><span class="dot" id="connDot"></span><span id="connLabel">连接中…</span></span>
+    <span>刷新: <span id="lastRefresh">—</span></span>
+  </div>
+  <button class="refresh-btn" id="pauseBtn" title="暂停刷新">
+    <!-- pause icon -->
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+  </button>
+  <button class="refresh-btn" id="refreshBtn" title="手动刷新">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M4 12a8 8 0 0 1 12.5-6.9"/><path d="M16 5h3v3"/><path d="M20 12a8 8 0 0 1-12.5 6.9"/><path d="M8 19H5v-3"/></svg>
+  </button>
+</div>
+
+<!-- ─── 主内容 ─── -->
+<div class="wrapper">
+
+  <!-- 价格横幅 -->
+  <div class="price-banner">
+    <div class="price-card buy" id="cardBuy">
+      <div class="label">买入价 <span class="tag">ActivePrice</span></div>
+      <div class="price-row">
+        <span class="currency">¥</span>
+        <span class="price" id="priceBuy">—</span>
+        <span class="change" id="changeBuy"></span>
+      </div>
+      <div class="time" id="timeBuy">更新时间: —</div>
+    </div>
+    <div class="price-card sell" id="cardSell">
+      <div class="label">卖出价 <span class="tag">SellPrice</span></div>
+      <div class="price-row">
+        <span class="currency">¥</span>
+        <span class="price" id="priceSell">—</span>
+        <span class="change" id="changeSell"></span>
+      </div>
+      <div class="time" id="timeSell">更新时间: —</div>
+    </div>
+  </div>
+
+  <!-- 持仓面板 -->
+  <div class="portfolio">
+    <div class="section-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>
+      我的持仓 / Portfolio
+    </div>
+    <div class="stats-row">
+      <div class="stat-box">
+        <div class="s-label">持有克重 (g)</div>
+        <div class="s-value" id="statGram">0</div>
+      </div>
+      <div class="stat-box">
+        <div class="s-label">买入均价</div>
+        <div class="s-value" id="statAvg">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="s-label">持仓市值</div>
+        <div class="s-value" id="statValue">—</div>
+      </div>
+      <div class="stat-box">
+        <div class="s-label">浮动盈亏</div>
+        <div class="s-value" id="statPnl">—</div>
+        <div class="s-sub" id="statPnlPct">—</div>
+      </div>
+    </div>
+    <div class="input-row">
+      <div class="input-group">
+        <label>买入克重 (g)</label>
+        <input type="number" id="inGram" placeholder="0" min="0" step="0.01" />
+      </div>
+      <div class="input-group">
+        <label>买入金价 (元/克)</label>
+        <input type="number" id="inPrice" placeholder="当前买入价" min="0" step="0.01" />
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn buy" id="btnBuy">＋ 模拟买入</button>
+      <button class="btn sell" id="btnSell" disabled>－ 模拟卖出</button>
+    </div>
+  </div>
+
+  <!-- 交易历史 -->
+  <div class="trade-history">
+    <div class="section-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      交易记录
+    </div>
+    <div class="trade-list" id="tradeList">
+      <div class="empty-hint">暂无交易记录</div>
+    </div>
+  </div>
+
+  <!-- 价格走势图 -->
+  <div class="chart-panel">
+    <div class="chart-header">
+      <div class="section-title" style="margin-bottom:0">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        价格走势
+      </div>
+      <div class="chart-tabs">
+        <button class="chart-tab active" data-days="1">1天</button>
+        <button class="chart-tab" data-days="7">7天</button>
+        <button class="chart-tab" data-days="30">30天</button>
+      </div>
+    </div>
+    <div class="chart-canvas-wrap">
+      <canvas id="chart"></canvas>
+      <div class="chart-crosshair" id="crosshair"></div>
+      <div class="chart-tooltip" id="tooltip">
+        <div class="ct-price" id="ttPrice">—</div>
+        <div class="ct-time" id="ttTime">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置面板 -->
+  <div class="settings-panel">
+    <div class="section-title">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      设置 / Configuration
+    </div>
+
+    <!-- 刷新频率 -->
+    <div class="settings-section">
+      <div class="s-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+        刷新频率
+      </div>
+      <div class="freq-chips" id="freqChips">
+        <button class="freq-chip" data-sec="3">3秒</button>
+        <button class="freq-chip active" data-sec="5">5秒</button>
+        <button class="freq-chip" data-sec="10">10秒</button>
+        <button class="freq-chip" data-sec="60">1分钟</button>
+        <button class="freq-chip" data-sec="300">5分钟</button>
+        <button class="freq-chip" data-sec="600">10分钟</button>
+        <button class="freq-chip" data-sec="1800">30分钟</button>
+      </div>
+    </div>
+
+    <!-- Webhook通知 -->
+    <div class="settings-section">
+      <div class="s-title" style="justify-content:space-between">
+        <span style="display:flex;align-items:center;gap:6px">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+          消息通知 (Webhook)
+        </span>
+        <label class="toggle"><input type="checkbox" id="webhookToggle" /><span class="slider"></span></label>
+      </div>
+      <div class="webhook-row">
+        <input type="text" id="webhookUrl" placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..." />
+      </div>
+    </div>
+
+    <!-- 监控规则 -->
+    <div class="settings-section">
+      <div class="s-title">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        价格监控规则
+      </div>
+      <div class="alerts-list" id="alertsList"></div>
+      <button class="add-alert-btn" id="addAlertBtn">＋ 添加规则</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast容器 -->
+<div class="toast-stack" id="toastStack"></div>
+
+<script>
+// ===================================================================
+// 状态
+// ===================================================================
+const STATE = {
+  buyPrice: 0,     // 买入价 (ActivePrice)
+  sellPrice: 0,    // 卖出价 (SellPrice)
+  highPrice: 0,
+  lowPrice: 0,
+  prevBuy: 0, prevSell: 0,
+  lastTime: '',
+  holdings: [],    // { grams, price, time }
+  trades: [],      // { type, grams, price, time }
+  alerts: [],      // { type:'up'|'down', price, enabled }
+  webhookUrl: '',
+  webhookEnabled: false,
+  refreshSec: 5,
+  chartDays: 1,
+  chartData: [],   // { time, price }
+  alertTriggered: {},
+};
+
+// ===================================================================
+// localStorage 持久化
+// ===================================================================
+function loadState() {
+  try {
+    const s = localStorage.getItem('gold_state_v2');
+    if (s) {
+      const p = JSON.parse(s);
+      STATE.holdings = p.holdings || [];
+      STATE.trades = p.trades || [];
+      STATE.alerts = p.alerts || [{ type:'up', price:1100, enabled:true },{ type:'down', price:1060, enabled:true }];
+      STATE.webhookUrl = p.webhookUrl || '';
+      STATE.webhookEnabled = p.webhookEnabled || false;
+      STATE.refreshSec = p.refreshSec || 5;
+      return;
+    }
+  } catch(e){}
+  STATE.alerts = [{ type:'up', price:1100, enabled:true },{ type:'down', price:1060, enabled:true }];
+}
+function saveState() {
+  localStorage.setItem('gold_state_v2', JSON.stringify({
+    holdings: STATE.holdings,
+    trades: STATE.trades,
+    alerts: STATE.alerts,
+    webhookUrl: STATE.webhookUrl,
+    webhookEnabled: STATE.webhookEnabled,
+    refreshSec: STATE.refreshSec,
+  }));
+}
+loadState();
+
+// ===================================================================
+// 工行积存金接口 — corsproxy 代理
+// ===================================================================
+const ICBC_CONFIG = {
+  URL: 'https://corsproxy.io/' + 'https://mybank.icbc.com.cn/servlet/AsynGetDataServlet',
+  HEADERS: {
+    'Accept': 'application/json, text/javascript, */*; q=0.01',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en-US;q=0.8,en;q=0.7,en-GB;q=0.6',
+    'Connection': 'keep-alive',
+    'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+    'Referer': 'https://mybank.icbc.com.cn/icbc/newperbank/perbank3/gold/goldaccrual_query_out.jsp',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36 Edg/144.0.0.0',
+    'X-Requested-With': 'XMLHttpRequest',
+  },
+  PAYLOAD: { tranCode: 'A00622' }
+};
+
+async function fetchGoldPrice() {
+  const body = new URLSearchParams(Object.entries(ICBC_CONFIG.PAYLOAD)).toString();
+  const res = await fetch(ICBC_CONFIG.URL, {
+    method: 'POST',
+    headers: ICBC_CONFIG.HEADERS,
+    body: body,
+    mode: 'cors',
+    credentials: 'omit'
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const json = await res.json();
+  if (!json.rf || !json.rf.length) throw new Error('empty rf');
+  // 响应字段映射 → 内部统一格式
+  const g = json.rf[0];
+  return {
+    ActivePrice: parseFloat(g.ActivePrice),   // 买入价
+    SellPrice:   parseFloat(g.SellPrice),     // 卖出价
+    HighPrice:   parseFloat(g.HighPrice),     // 最高价
+    LowPrice:    parseFloat(g.LowPrice),      // 最低价
+    RegPrice:    parseFloat(g.RegPrice),      // 登记价（开盘参考）
+    sysdate:     json.sysdate                 // 服务端时间
+  };
+}
+
+// ===================================================================
+// fetchKline — 工行接口无K线端点，图表靠实时累积数据 + mock 填充
+// ===================================================================
+async function fetchKline(days) { return []; }
+
+// ===================================================================
+// UI 刷新
+// ===================================================================
+function updatePrices() {
+  const cur  = STATE.buyPrice;
+  const prev = STATE.prevBuy;
+  const diff = cur - prev;
+  const pct  = prev ? (diff / prev * 100) : 0;
+
+  document.getElementById('priceBuy').textContent  = cur.toFixed(2);
+  document.getElementById('priceSell').textContent = STATE.sellPrice.toFixed(2);
+
+  // 优先用服务端 sysdate，无则本地时间
+  const timeStr = STATE.lastTime || formatTime(new Date());
+  document.getElementById('timeBuy').textContent  = '更新时间: ' + timeStr;
+  document.getElementById('timeSell').textContent = '更新时间: ' + timeStr;
+
+  const now = new Date();
+  document.getElementById('lastRefresh').textContent = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+
+  setChangeLabel('changeBuy',  diff, pct);
+  setChangeLabel('changeSell', STATE.sellPrice - (STATE.prevSell || STATE.sellPrice), pct);
+
+  document.getElementById('connDot').className = 'dot';
+  document.getElementById('connLabel').textContent = '实时';
+
+  updatePortfolio();
+}
+
+function setChangeLabel(id, diff, pct) {
+  const el = document.getElementById(id);
+  const sign = diff > 0 ? '+' : '';
+  el.textContent = `${sign}${diff.toFixed(2)} (${sign}${pct.toFixed(2)}%)`;
+  el.className = 'change ' + (diff > 0 ? 'up' : diff < 0 ? 'down' : '');
+}
+
+function updatePortfolio() {
+  let totalGrams = 0, totalCost = 0;
+  STATE.holdings.forEach(h => { totalGrams += h.grams; totalCost += h.grams * h.price; });
+  const avgPrice = totalGrams ? (totalCost / totalGrams) : 0;
+  const curVal = totalGrams * STATE.sellPrice; // 卖出价计算市值
+  const pnl = curVal - totalCost;
+  const pnlPct = totalCost ? (pnl / totalCost * 100) : 0;
+
+  document.getElementById('statGram').textContent = totalGrams.toFixed(2);
+  document.getElementById('statAvg').textContent = avgPrice ? '¥' + avgPrice.toFixed(2) : '—';
+  document.getElementById('statValue').textContent = totalGrams ? '¥' + curVal.toFixed(2) : '—';
+
+  const pnlEl = document.getElementById('statPnl');
+  pnlEl.textContent = totalGrams ? (pnl >= 0 ? '+' : '') + '¥' + pnl.toFixed(2) : '—';
+  pnlEl.className = 's-value ' + (pnl > 0 ? 'up' : pnl < 0 ? 'down' : '');
+  document.getElementById('statPnlPct').textContent = totalGrams ? `(${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%)` : '—';
+
+  document.getElementById('btnSell').disabled = totalGrams <= 0;
+}
+
+function renderTrades() {
+  const list = document.getElementById('tradeList');
+  if (!STATE.trades.length) { list.innerHTML = '<div class="empty-hint">暂无交易记录</div>'; return; }
+  list.innerHTML = STATE.trades.slice().reverse().map(t => `
+    <div class="trade-item">
+      <div class="t-left">
+        <span class="t-badge ${t.type}">${t.type === 'buy' ? '买入' : '卖出'}</span>
+        <div>
+          <div>${t.grams.toFixed(2)} g</div>
+          <div class="t-detail">单价 ¥${t.price.toFixed(2)}</div>
+        </div>
+      </div>
+      <div class="t-right">
+        <div class="t-amount">¥${(t.grams * t.price).toFixed(2)}</div>
+        <div class="t-time">${t.time}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderAlerts() {
+  const container = document.getElementById('alertsList');
+  container.innerHTML = STATE.alerts.map((a, i) => `
+    <div class="alert-item">
+      <input type="checkbox" ${a.enabled ? 'checked' : ''} onchange="toggleAlert(${i})" />
+      <div class="alert-label">
+        价格 <strong style="color:${a.type==='up'?'var(--red)':'var(--blue)'}">${a.type === 'up' ? '上穿 ▲' : '下穿 ▼'}</strong>
+      </div>
+      <input class="alert-price-input" type="number" value="${a.price}" oninput="updateAlertPrice(${i}, this.value)" />
+      <span class="alert-label" style="max-width:30px">元</span>
+      <button class="del-btn" onclick="removeAlert(${i})">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
+    </div>
+  `).join('');
+}
+
+function renderSettings() {
+  document.getElementById('webhookUrl').value = STATE.webhookUrl;
+  document.getElementById('webhookToggle').checked = STATE.webhookEnabled;
+  document.querySelectorAll('.freq-chip').forEach(el => {
+    el.classList.toggle('active', +el.dataset.sec === STATE.refreshSec);
+  });
+  renderAlerts();
+}
+
+// ===================================================================
+// 交易逻辑
+// ===================================================================
+document.getElementById('btnBuy').addEventListener('click', () => {
+  const grams = parseFloat(document.getElementById('inGram').value);
+  const price = parseFloat(document.getElementById('inPrice').value) || STATE.buyPrice;
+  if (!grams || grams <= 0) return showToast('请输入有效克重', 'warn');
+  if (!price || price <= 0) return showToast('请输入有效金价', 'warn');
+  STATE.holdings.push({ grams, price });
+  const now = new Date();
+  STATE.trades.push({ type:'buy', grams, price, time: formatTime(now) });
+  document.getElementById('inGram').value = '';
+  document.getElementById('inPrice').value = '';
+  saveState();
+  updatePortfolio();
+  renderTrades();
+  showToast(`买入 ${grams}g @ ¥${price.toFixed(2)}`, 'buy');
+});
+
+document.getElementById('btnSell').addEventListener('click', () => {
+  const grams = parseFloat(document.getElementById('inGram').value);
+  let totalHeld = STATE.holdings.reduce((s,h) => s + h.grams, 0);
+  const sellGrams = grams && grams > 0 ? Math.min(grams, totalHeld) : totalHeld;
+  if (sellGrams <= 0) return;
+  // FIFO卖出
+  let remain = sellGrams;
+  while (remain > 0 && STATE.holdings.length) {
+    const h = STATE.holdings[0];
+    if (h.grams <= remain) { remain -= h.grams; STATE.holdings.shift(); }
+    else { h.grams -= remain; remain = 0; }
+  }
+  const now = new Date();
+  STATE.trades.push({ type:'sell', grams: sellGrams, price: STATE.sellPrice, time: formatTime(now) });
+  document.getElementById('inGram').value = '';
+  saveState();
+  updatePortfolio();
+  renderTrades();
+  showToast(`卖出 ${sellGrams.toFixed(2)}g @ ¥${STATE.sellPrice.toFixed(2)}`, 'sell');
+});
+
+// ===================================================================
+// 图表 (Canvas)
+// ===================================================================
+const canvas = document.getElementById('chart');
+const ctx = canvas.getContext('2d');
+let chartPixelRatio = window.devicePixelRatio || 1;
+
+function resizeCanvas() {
+  const wrap = canvas.parentElement;
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  canvas.width = w * chartPixelRatio;
+  canvas.height = h * chartPixelRatio;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(chartPixelRatio, chartPixelRatio);
+}
+
+async function loadAndDrawChart(days) {
+  STATE.chartDays = days;
+  try {
+    const klines = await fetchKline(days);
+    STATE.chartData = klines.map(k => ({ time: k.time, price: k.close }));
+    drawChart();
+  } catch(e) {
+    console.warn('K线加载失败', e);
+    // fallback: 用模拟数据展示
+    generateMockData(days);
+    drawChart();
+  }
+}
+
+function generateMockData(days) {
+  // 基于当前价格生成仿真数据用于演示
+  const base = STATE.buyPrice || 1070;
+  const count = days === 1 ? 60 : days === 7 ? 168 : 720;
+  STATE.chartData = [];
+  let price = base - (Math.random() * 20 - 10);
+  const now = Date.now();
+  const interval = (days * 86400000) / count;
+  for (let i = 0; i < count; i++) {
+    price += (Math.random() - 0.48) * 3;
+    price = Math.max(base - 30, Math.min(base + 30, price));
+    const t = new Date(now - (count - i) * interval);
+    const timeStr = days === 1
+      ? `${pad(t.getHours())}:${pad(t.getMinutes())}`
+      : `${t.getMonth()+1}/${t.getDate()} ${pad(t.getHours())}:${pad(t.getMinutes())}`;
+    STATE.chartData.push({ time: timeStr, price });
+  }
+  // 最后一个点设为当前价
+  if (STATE.chartData.length) STATE.chartData[STATE.chartData.length - 1].price = base;
+}
+
+function drawChart() {
+  const dpr = chartPixelRatio;
+  const wrap = canvas.parentElement;
+  const W = wrap.clientWidth;
+  const H = wrap.clientHeight;
+  resizeCanvas();
+
+  const data = STATE.chartData;
+  if (!data.length) return;
+
+  const pad = { top: 20, right: 60, bottom: 28, left: 10 };
+  const cw = W - pad.left - pad.right;
+  const ch = H - pad.top - pad.bottom;
+
+  const prices = data.map(d => d.price);
+  const minP = Math.min(...prices);
+  const maxP = Math.max(...prices);
+  const range = maxP - minP || 1;
+  const padAmt = range * 0.15;
+  const yMin = minP - padAmt;
+  const yMax = maxP + padAmt;
+  const yRange = yMax - yMin;
+
+  const xScale = (i) => pad.left + (i / (data.length - 1)) * cw;
+  const yScale = (p) => pad.top + (1 - (p - yMin) / yRange) * ch;
+
+  // 清除
+  ctx.clearRect(0, 0, W, H);
+
+  // 水平网格线 + 价格标签
+  ctx.font = '11px ' + getComputedStyle(document.body).fontFamily;
+  ctx.fillStyle = '#5c6370';
+  const gridCount = 4;
+  for (let i = 0; i <= gridCount; i++) {
+    const p = yMin + (yRange * i / gridCount);
+    const y = yScale(p);
+    ctx.strokeStyle = 'rgba(30,39,54,.7)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    ctx.textAlign = 'right';
+    ctx.fillText(p.toFixed(2), W - 6, y + 4);
+  }
+
+  // 时间轴标签
+  ctx.fillStyle = '#5c6370';
+  ctx.textAlign = 'center';
+  const labelCount = 5;
+  for (let i = 0; i <= labelCount; i++) {
+    const idx = Math.round((data.length - 1) * i / labelCount);
+    const x = xScale(idx);
+    ctx.fillText(data[idx].time, x, H - 6);
+  }
+
+  // 渐变填充
+  const grad = ctx.createLinearGradient(0, pad.top, 0, H - pad.bottom);
+  grad.addColorStop(0, 'rgba(201,168,76,.25)');
+  grad.addColorStop(1, 'rgba(201,168,76,0)');
+  ctx.fillStyle = grad;
+  ctx.beginPath();
+  ctx.moveTo(xScale(0), yScale(data[0].price));
+  data.forEach((d, i) => { if (i) ctx.lineTo(xScale(i), yScale(d.price)); });
+  ctx.lineTo(xScale(data.length - 1), H - pad.bottom);
+  ctx.lineTo(xScale(0), H - pad.bottom);
+  ctx.closePath();
+  ctx.fill();
+
+  // 折线
+  ctx.strokeStyle = 'var(--gold)';
+  ctx.lineWidth = 2;
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  data.forEach((d, i) => { i === 0 ? ctx.moveTo(xScale(i), yScale(d.price)) : ctx.lineTo(xScale(i), yScale(d.price)); });
+  ctx.stroke();
+
+  // 监控规则水平线
+  STATE.alerts.forEach(a => {
+    if (!a.enabled || a.price < yMin || a.price > yMax) return;
+    const y = yScale(a.price);
+    ctx.strokeStyle = a.type === 'up' ? 'rgba(242,92,92,.5)' : 'rgba(77,163,255,.5)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(W - pad.right, y); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = a.type === 'up' ? 'var(--red)' : 'var(--blue)';
+    ctx.font = 'bold 10px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textAlign = 'right';
+    ctx.fillText((a.type === 'up' ? '▲ ' : '▼ ') + a.price, W - 6, y - 4);
+  });
+
+  // 最新价标记点
+  if (data.length) {
+    const last = data[data.length - 1];
+    const lx = xScale(data.length - 1);
+    const ly = yScale(last.price);
+    ctx.beginPath();
+    ctx.arc(lx, ly, 5, 0, Math.PI * 2);
+    ctx.fillStyle = 'var(--gold)';
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // 保存缩放信息用于 hover
+  canvas._chartMeta = { data, xScale, yScale, pad: { top: pad.top, bottom: pad.bottom, left: pad.left, right: pad.right }, W, H };
+}
+
+// hover 交互
+canvas.addEventListener('mousemove', (e) => {
+  const meta = canvas._chartMeta;
+  if (!meta || !meta.data.length) return;
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left;
+  const { data, xScale, pad } = meta;
+  const cw = meta.W - pad.left - pad.right;
+  let idx = Math.round((mx - pad.left) / cw * (data.length - 1));
+  idx = Math.max(0, Math.min(data.length - 1, idx));
+  const d = data[idx];
+  const x = xScale(idx);
+
+  document.getElementById('crosshair').style.display = 'block';
+  document.getElementById('crosshair').style.left = x + 'px';
+
+  const tt = document.getElementById('tooltip');
+  tt.style.display = 'block';
+  tt.style.left = Math.min(x + 12, meta.W - 130) + 'px';
+  tt.style.top = '10px';
+  document.getElementById('ttPrice').textContent = '¥' + d.price.toFixed(2);
+  document.getElementById('ttTime').textContent = d.time;
+});
+canvas.addEventListener('mouseleave', () => {
+  document.getElementById('crosshair').style.display = 'none';
+  document.getElementById('tooltip').style.display = 'none';
+});
+
+// 切换K线周期
+document.querySelectorAll('.chart-tab').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.chart-tab').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    loadAndDrawChart(+btn.dataset.days);
+  });
+});
+
+// ===================================================================
+// 警报逻辑
+// ===================================================================
+function checkAlerts() {
+  const price = STATE.buyPrice;
+  STATE.alerts.forEach((a, i) => {
+    if (!a.enabled) { delete STATE.alertTriggered[i]; return; }
+    const key = i;
+    if (a.type === 'up' && price >= a.price && !STATE.alertTriggered[key]) {
+      STATE.alertTriggered[key] = true;
+      showToast(`⚠️ 金价上穿 ¥${a.price} — 当前 ¥${price.toFixed(2)}`, 'alert-up');
+      sendWebhook(`🔺 金价上穿警报: 触发价 ¥${a.price}，当前价 ¥${price.toFixed(2)}`);
+      // 闪烁卡片
+      document.getElementById('cardBuy').classList.add('alert-triggered');
+      setTimeout(() => document.getElementById('cardBuy').classList.remove('alert-triggered'), 3000);
+    }
+    if (a.type === 'down' && price <= a.price && !STATE.alertTriggered[key]) {
+      STATE.alertTriggered[key] = true;
+      showToast(`⚠️ 金价下穿 ¥${a.price} — 当前 ¥${price.toFixed(2)}`, 'alert-down');
+      sendWebhook(`🔻 金价下穿警报: 触发价 ¥${a.price}，当前价 ¥${price.toFixed(2)}`);
+      document.getElementById('cardSell').classList.add('alert-triggered');
+      setTimeout(() => document.getElementById('cardSell').classList.remove('alert-triggered'), 3000);
+    }
+    // 价格回到安全区域则重置
+    if (a.type === 'up' && price < a.price - 1) delete STATE.alertTriggered[key];
+    if (a.type === 'down' && price > a.price + 1) delete STATE.alertTriggered[key];
+  });
+}
+
+function toggleAlert(i) { STATE.alerts[i].enabled = !STATE.alerts[i].enabled; saveState(); renderAlerts(); }
+function updateAlertPrice(i, v) { STATE.alerts[i].price = parseFloat(v) || 0; saveState(); drawChart(); }
+function removeAlert(i) { STATE.alerts.splice(i, 1); saveState(); renderAlerts(); drawChart(); }
+document.getElementById('addAlertBtn').addEventListener('click', () => {
+  const hasUp = STATE.alerts.some(a => a.type === 'up');
+  STATE.alerts.push({ type: hasUp ? 'down' : 'up', price: STATE.buyPrice || 1080, enabled: true });
+  saveState(); renderAlerts(); drawChart();
+});
+
+// ===================================================================
+// Webhook
+// ===================================================================
+async function sendWebhook(msg) {
+  if (!STATE.webhookEnabled || !STATE.webhookUrl) return;
+  try {
+    // 飞书 Bot Webhook
+    await fetch(STATE.webhookUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ msgtype: 'text', text: { content: msg } })
+    });
+  } catch(e) { console.warn('Webhook 发送失败', e); }
+}
+
+document.getElementById('webhookUrl').addEventListener('input', (e) => { STATE.webhookUrl = e.target.value; saveState(); });
+document.getElementById('webhookToggle').addEventListener('change', (e) => { STATE.webhookEnabled = e.target.checked; saveState(); });
+
+// ===================================================================
+// 刷新频率
+// ===================================================================
+let refreshTimer = null;
+let isPaused = false;
+
+// ─── pause图标 / play图标 SVG片段 ───
+const ICON_PAUSE = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>`;
+const ICON_PLAY  = `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5,3 19,12 5,21"/></svg>`;
+
+document.getElementById('freqChips').addEventListener('click', (e) => {
+  const chip = e.target.closest('.freq-chip');
+  if (!chip) return;
+  STATE.refreshSec = +chip.dataset.sec;
+  saveState();
+  document.querySelectorAll('.freq-chip').forEach(c => c.classList.toggle('active', +c.dataset.sec === STATE.refreshSec));
+  // 切换频率时若暂停状态不自动恢复，仅重建timer
+  if (!isPaused) startRefreshLoop();
+});
+
+function startRefreshLoop() {
+  if (refreshTimer) clearInterval(refreshTimer);
+  fetchAndUpdate();
+  refreshTimer = setInterval(fetchAndUpdate, STATE.refreshSec * 1000);
+}
+
+function stopRefreshLoop() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+}
+
+function syncPauseUI() {
+  const btn = document.getElementById('pauseBtn');
+  if (isPaused) {
+    btn.classList.add('paused');
+    btn.title = '恢复刷新';
+    btn.innerHTML = ICON_PLAY;
+    document.getElementById('connDot').className = 'dot off';
+    document.getElementById('connLabel').textContent = '已暂停';
+  } else {
+    btn.classList.remove('paused');
+    btn.title = '暂停刷新';
+    btn.innerHTML = ICON_PAUSE;
+  }
+}
+
+// ─── 暂停 / 恢复 ───
+document.getElementById('pauseBtn').addEventListener('click', () => {
+  isPaused = !isPaused;
+  if (isPaused) {
+    stopRefreshLoop();
+  } else {
+    startRefreshLoop();
+  }
+  syncPauseUI();
+});
+
+// ===================================================================
+// 手动刷新（暂停时也可用）
+// ===================================================================
+document.getElementById('refreshBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('refreshBtn');
+  btn.classList.add('spinning');
+  await fetchAndUpdate();
+  btn.classList.remove('spinning');
+});
+
+// ===================================================================
+// 核心数据拉取
+// ===================================================================
+async function fetchAndUpdate() {
+  try {
+    const data = await fetchGoldPrice();
+    STATE.prevBuy  = STATE.buyPrice;
+    STATE.prevSell = STATE.sellPrice;
+
+    // 工行响应字段映射
+    STATE.buyPrice  = data.ActivePrice;   // 买入价
+    STATE.sellPrice = data.SellPrice;     // 卖出价
+    STATE.highPrice = data.HighPrice;
+    STATE.lowPrice  = data.LowPrice;
+    STATE.lastTime  = data.sysdate;       // 服务端时间戳
+
+    // 追加到图表数据
+    const t = data.sysdate ? data.sysdate.slice(11,16) : `${pad(new Date().getHours())}:${pad(new Date().getMinutes())}`;
+    STATE.chartData.push({ time: t, price: data.ActivePrice });
+    if (STATE.chartDays === 1 && STATE.chartData.length > 300) STATE.chartData.shift();
+
+    updatePrices();
+    checkAlerts();
+    drawChart();
+  } catch(e) {
+    console.warn('数据拉取失败', e);
+    // 首次失败则生成模拟数据维持UI可用
+    if (!STATE.buyPrice) {
+      STATE.buyPrice  = 1071 + Math.random() * 10;
+      STATE.sellPrice = STATE.buyPrice - 1;
+      STATE.prevBuy   = STATE.buyPrice - (Math.random() * 2 - 1);
+      STATE.prevSell  = STATE.sellPrice - (Math.random() * 2 - 1);
+      generateMockData(STATE.chartDays);
+      updatePrices();
+      drawChart();
+    }
+    // 标记连接异常
+    document.getElementById('connDot').className = 'dot off';
+    document.getElementById('connLabel').textContent = '断线';
+  }
+}
+
+// ===================================================================
+// Toast 通知
+// ===================================================================
+function showToast(msg, type = 'info') {
+  const stack = document.getElementById('toastStack');
+  const t = document.createElement('div');
+  t.className = 'toast ' + (type === 'alert-up' ? 'alert-up' : type === 'alert-down' ? 'alert-down' : '');
+  const icons = { buy: '✅', sell: '📤', warn: '⚠️', 'alert-up': '🔺', 'alert-down': '🔻', info: 'ℹ️' };
+  t.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span>${msg}</span>`;
+  stack.appendChild(t);
+  setTimeout(() => t.remove(), 3500);
+}
+
+// ===================================================================
+// 工具函数
+// ===================================================================
+function pad(n) { return String(n).padStart(2, '0'); }
+function formatTime(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`; }
+
+// ===================================================================
+// 初始化
+// ===================================================================
+window.addEventListener('load', () => {
+  resizeCanvas();
+  renderSettings();
+  renderTrades();
+  updatePortfolio();
+  syncPauseUI();
+  // 生成初始图表占位
+  generateMockData(STATE.chartDays);
+  drawChart();
+  // 启动刷新循环
+  startRefreshLoop();
+  // 窗口大小变化重绘
+  let resizeTimer;
+  window.addEventListener('resize', () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { resizeCanvas(); drawChart(); }, 150); });
+});
+</script>
+</body>
+</html>
